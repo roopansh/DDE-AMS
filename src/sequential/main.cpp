@@ -9,9 +9,9 @@
 #define MUTATION_RATE 0.5
 #define MIGRATION_PROB 0.05
 #define CROSSOVER_RATE 0.9
-#define TERMINATION_THRESHOLD 1e-3
+#define TERMINATION_THRESHOLD 0.00001
 
-const int DIMENSION = 20;
+const int DIMENSION = 2;
 
 using namespace std;
 
@@ -64,13 +64,14 @@ bool operator==(node a, node b){
 }
 
 int main() {
+	srand(time(NULL)); // randomize seed
 	master();
 	return 0;
 }
 
 
 void master() {
-    GENERATION = 0;
+    GENERATION = 1;
 
     // spawn sub population
     subpopulation.resize(NUM_SLAVES);
@@ -111,13 +112,20 @@ void master() {
         GENERATION++;
 
         // termination
-        if(GENERATION > 1){
-        	if(second_norm(vector_diff(best_node.x, best_node_prev.x)) <= TERMINATION_THRESHOLD);
-        	break;
+        if(GENERATION > 1000){
+        	if(second_norm(vector_diff(best_node.x, best_node_prev.x)) <= TERMINATION_THRESHOLD){
+	        	// print output
+	        	cout<<GENERATION<<endl;
+	        	for(int i = 0; i < best_node.x.size(); i++){
+	        		cout<<best_node.x[i]<<" ";
+	        	}
+	        	break;
+        	}
         }
 
         best_node_prev = best_node;
     }
+    cout<<endl<<"DONE"<<endl;
 
 }
 
@@ -126,7 +134,7 @@ void spawn_subpop(int sp){
     // initialise with random x values
     int node_counter = 0;
     for(int i = 0 ; i < SUBPOPULATION_SIZE; i++){
-        subpopulation[sp][i] = rand_node(node_counter);
+        subpopulation[sp][i] = rand_node(node_counter++);
     }
 }
 
@@ -373,6 +381,7 @@ float second_norm(vector<float> input){
 
 
 float opt_func(vector<float> input){
+	return second_norm(input);
 	return 0.0f;
 }
 
