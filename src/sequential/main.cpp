@@ -110,9 +110,11 @@ void master() {
         }
 
         GENERATION++;
+        
+        if(GENERATION % 100 == 0) cout<<GENERATION<<endl;
 
         // termination
-        if(GENERATION > 1000){
+        if(GENERATION > 100){
         	if(second_norm(vector_diff(best_node.x, best_node_prev.x)) <= TERMINATION_THRESHOLD){
 	        	// print output
 	        	cout<<GENERATION<<endl;
@@ -379,9 +381,49 @@ float second_norm(vector<float> input){
 	return norm;
 }
 
+float shifted_elliptic(vector<float> input){
+	float result = 0;
+	float d = input.size() - 1;
+	for(int i = 0; i < input.size() ; i++){
+		result += pow(1000000,(i/d))*input[i]*input[i];
+	}
+	return result;
+}
+
+float shifted_rastrigin(vector<float> input){
+	float result = 0;
+	for(int i = 0; i < input.size() ; i++){
+		result += (input[i]*input[i] - 10*cos(2*3.14*input[i]) + 10);
+	}
+	return result;
+}
+
+float shifted_ackley(vector<float> input){
+	float r1 = 0, r2 = 0; 
+	float d = input.size();
+	for(int i = 0; i < input.size() ; i++){
+		r1 += (input[i]*input[i]);
+	}
+	for(int i = 0; i < input.size() ; i++){
+		r2 += cos(input[i]);
+	}
+	r1 = -0.2*sqrt(r1/d);
+	r2 = r2/d;
+	float result = -20*exp(r1) - exp(r2) + 20 + exp(1);
+	return result;
+}
 
 float opt_func(vector<float> input){
-	return second_norm(input);
+	switch(1) {
+		case 1: return second_norm(input);
+				break;
+		case 2: return shifted_elliptic(input);
+				break;
+		case 3: return shifted_rastrigin(input);
+				break;
+		case 4: return shifted_ackley(input);
+				break;		
+	}
 	return 0.0f;
 }
 
