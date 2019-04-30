@@ -1,4 +1,4 @@
-// #include "pch.h"
+#include "pch.h"
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -15,9 +15,10 @@
 #define MUTATION_RATE 0.5
 #define MIGRATION_PROB 0.05
 #define CROSSOVER_RATE 0.9
-#define TERMINATION_THRESHOLD 0.0000001
+const float TERMINATION_THRESHOLD = 1e-2;
 
-const int DIMENSION = 20;
+int DIMENSION = 500;
+const int GEN_THRESSHOLD = 2;
 
 using namespace std;
 
@@ -71,19 +72,23 @@ bool operator==(node a, node b) {
 
 int main() {
 	srand(time(NULL)); // randomize seed
+	const clock_t begin_time = clock();
 	master();
+	const clock_t end_time = clock();
+	cout << "Time taken for GENERATION : " << GENERATION << " is " << float(end_time - begin_time) / CLOCKS_PER_SEC << "seconds" << endl;
 	return 0;
 }
 
 
 void master() {
 	GENERATION = 1;
+	vector<float> ZEROES(DIMENSION, 0);
 
 	// spawn sub population
 	subpopulation.resize(NUM_SLAVES);
 	contribution.resize(NUM_SLAVES, 0.0f);
 
-	#pragma omp num_threads(32) parallel for
+	#pragma omp parallel for num_threads(32)
 	for (int i = 0; i < NUM_SLAVES; i++) {
 		spawn_subpop(i);
 	}
@@ -94,7 +99,7 @@ void master() {
 	while (true) {
 
 		// perform the code for each node
-		#pragma omp num_threads(32) parallel for
+		#pragma omp parallel for num_threads(32)
 		for (int slave = 0; slave < subpopulation.size(); slave++) {
 			perform_slave_op(slave);
 		}
@@ -123,10 +128,11 @@ void master() {
 		if (GENERATION% 100 == 0)	cout << "Generation :" << GENERATION << endl;
 
 		// termination
-		if (GENERATION > 2000) {
-			if (second_norm(vector_diff(best_node.x, best_node_prev.x)) <= TERMINATION_THRESHOLD) {
+		if (GENERATION > GEN_THRESSHOLD) {
+			if (second_norm(vector_diff(best_node.x, ZEROES)) <= TERMINATION_THRESHOLD &&
+				abs(opt_func(best_node.x) - opt_func(ZEROES)) <= TERMINATION_THRESHOLD){
 				// print output
-				cout << GENERATION << endl;	
+				cout << GENERATION << endl;
 				for (int i = 0; i < best_node.x.size(); i++) {
 					cout << best_node.x[i] << " ";
 				}
@@ -142,7 +148,7 @@ void spawn_subpop(int sp) {
 	subpopulation[sp].resize(SUBPOPULATION_SIZE);
 	// initialise with random x values
 	int node_counter = 0;
-	#pragma omp num_threads(32) parallel for
+	#pragma omp parallel for num_threads(32)
 	for (int i = 0; i < SUBPOPULATION_SIZE; i++) {
 		subpopulation[sp][i] = rand_node(node_counter++);
 	}
@@ -177,7 +183,7 @@ node get_best_node(vector<node> input, bool maximum = true) {
 	float best_value_max = opt_func(input[0].x);
 	float best_value_min = opt_func(input[0].x);
 
-	#pragma omp num_threads(32) parallel for
+	#pragma omp parallel for num_threads(32)
 	for (int i = 1; i < input.size(); i++) {
 		float value = opt_func(input[i].x);
 		if (value > best_value_max) {
@@ -199,7 +205,7 @@ node get_best_node(vector<node> input, bool maximum = true) {
 }
 
 void update_contribution(node best_node) {
-#pragma omp num_threads(32) parallel for
+#pragma omp parallel for num_threads(32)
 	for (int sp = 0; sp < subpopulation.size(); sp++) {	// for each subpopulation
 		// update the contribution
 		if (check_exists(subpopulation[sp], best_node)) {
@@ -248,7 +254,7 @@ void merge(vector<node> best, node best_node) {
 		int min_subpop = 0;
 
 		// check the subpop it exists in
-		#pragma omp num_threads(32) parallel for
+		#pragma omp parallel for num_threads(32)
 		for (int i = 0; i < best.size(); i++) {
 			if (best[i] == worst_of_best) {
 				min_subpop = i;
@@ -273,7 +279,7 @@ void merge(vector<node> best, node best_node) {
 int find_max_conttribution_subpop() {
 	int max_cont = contribution[0];
 	int sp = 0;
-#pragma omp num_threads(32) parallel for
+#pragma omp parallel for num_threads(32)
 	for (int i = 1; i < contribution.size(); i++) {
 		if (contribution[i] > max_cont) {
 			max_cont = contribution[i];
@@ -309,7 +315,7 @@ void perform_slave_op(int slave) {
 vector<node> selection(vector<node> u, vector<node> x) {
 	vector<node> result = x;
 
-	#pragma omp num_threads(32) parallel for
+	#pragma omp parallel for num_threads(32)
 	for (int i = 0; i < x.size(); i++) {
 		if (opt_func(u[i].x) <= opt_func(x[i].x)) {
 			result[i] = u[i];
@@ -384,7 +390,7 @@ vector<float> vector_diff(vector<float> a, vector<float> b) {
 
 vector<float> vector_product(float s, vector<float> v) {
 	vector<float> result;
-#pragma omp num_threads(32) parallel for
+#pragma omp parallel for num_threads(32)
 	for (int i = 0; i < v.size(); i++) {
 		result.push_back(s * v[i]);
 	}
