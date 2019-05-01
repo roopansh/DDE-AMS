@@ -7,17 +7,18 @@
 #include <fstream>
 
 #define SUBPOPULATION_SIZE 300
-#define NUM_SLAVES 10
+#define NUM_SLAVES 2
 #define MIN_SUBPOPULATION 4
 #define UPDATE_PERIOD 25
 #define THRESHOLD 80
 #define DECAY_RATE 0.3
-#define MUTATION_RATE 0.5
+#define MUTATION_RATE 0.516
+
 #define MIGRATION_PROB 0.05
 #define CROSSOVER_RATE 0.9
 const float TERMINATION_THRESHOLD = 1e-2;
 
-int DIMENSION = 7;
+int DIMENSION = 100;
 const int GEN_THRESSHOLD = 2;
 
 using namespace std;
@@ -72,10 +73,17 @@ bool operator==(node a, node b) {
 
 int main() {
 	srand(time(NULL)); // randomize seed
+	// ofstream myfile;
+	// myfile.open("output.log");
+
+	// for (int i = 0; i < 6; i++) {
 	const clock_t begin_time = clock();
+	// DIMENSION = DIMENSION_ARRAY[i];
 	master();
 	const clock_t end_time = clock();
 	cout << "Time taken for GENERATION : " << GENERATION << " is " << float(end_time - begin_time) / CLOCKS_PER_SEC << "seconds" << endl;
+	// myfile << "Time taken for GENERATION : " << GENERATION << " is " << float(end_time - begin_time) / CLOCKS_PER_SEC << "seconds" << endl;
+// }
 	return 0;
 }
 
@@ -115,6 +123,10 @@ void master() {
 		// get best of best
 		best_node = get_best_node(best, true);
 
+		// if (GENERATION == 1) {
+		//	best_node_prev = best_node;
+		// }
+
 		if (GENERATION % UPDATE_PERIOD == 0) {
 			// update con(si) from each subpopulation
 			update_contribution(best_node);
@@ -125,12 +137,17 @@ void master() {
 
 		GENERATION++;
 
-		if (GENERATION % 100 == 0)	cout << "Generation :" << GENERATION << endl;
+		if (GENERATION % 100 == 0) {
+			float temp = second_norm(vector_diff(best_node.x, ZEROES));
+			cout << "Generation :" << GENERATION << endl;
+			cout << temp << endl;
+			//best_node_prev = best_node;
+		}
 
 		// termination
 		if (GENERATION > GEN_THRESSHOLD) {
 			if (second_norm(vector_diff(best_node.x, ZEROES)) <= TERMINATION_THRESHOLD &&
-				abs(opt_func(best_node.x) - opt_func(ZEROES)) <= TERMINATION_THRESHOLD) {
+				abs(opt_func(best_node.x) - opt_func(ZEROES)) <= TERMINATION_THRESHOLD){
 				// print output
 				cout << GENERATION << endl;
 				for (int i = 0; i < best_node.x.size(); i++) {
@@ -138,6 +155,16 @@ void master() {
 				}
 				break;
 			}
+			/*
+			if (second_norm(vector_diff(best_node.x, best_node_prev.x)) <= TERMINATION_THRESHOLD) {
+				cout << GENERATION << endl;
+				for (int i = 0; i < best_node.x.size(); i++) {
+					cout << best_node.x[i] << " ";
+				}
+				break;
+
+			best_node_prev = best_node;
+			*/
 		}
 
 		best_node_prev = best_node;

@@ -5,9 +5,10 @@
 #include <time.h>
 #include <omp.h>
 #include <math.h>
+#include <fstream>
 
 #define SUBPOPULATION_SIZE 300
-#define NUM_SLAVES 10
+#define NUM_SLAVES 2
 #define MIN_SUBPOPULATION 4
 #define UPDATE_PERIOD 25
 #define THRESHOLD 80
@@ -15,9 +16,10 @@
 #define MUTATION_RATE 0.5
 #define MIGRATION_PROB 0.05
 #define CROSSOVER_RATE 0.9
+#define NUM_OF_THREADS 4
 const float TERMINATION_THRESHOLD = 1e-2;
 
-int DIMENSION = 500;
+int DIMENSION = 100;
 const int GEN_THRESSHOLD = 2;
 
 using namespace std;
@@ -72,10 +74,17 @@ bool operator==(node a, node b) {
 
 int main() {
 	srand(time(NULL)); // randomize seed
-	const clock_t begin_time = clock();
-	master();
-	const clock_t end_time = clock();
-	cout << "Time taken for GENERATION : " << GENERATION << " is " << float(end_time - begin_time) / CLOCKS_PER_SEC << "seconds" << endl;
+	// ofstream myfile;
+	// myfile.open("output.log");
+
+	// for (int i = 0; i < 6; i++) {
+		const clock_t begin_time = clock();
+		// DIMENSION = DIMENSION_ARRAY[i];
+		master();
+		const clock_t end_time = clock();
+		cout << "Time taken for GENERATION : " << GENERATION << " is " << float(end_time - begin_time) / CLOCKS_PER_SEC << "seconds" << endl;
+		// myfile << "Time taken for GENERATION : " << GENERATION << " is " << float(end_time - begin_time) / CLOCKS_PER_SEC << "seconds" << endl;
+	// }
 	return 0;
 }
 
@@ -88,7 +97,7 @@ void master() {
 	subpopulation.resize(NUM_SLAVES);
 	contribution.resize(NUM_SLAVES, 0.0f);
 
-	#pragma omp parallel for num_threads(32)
+	#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < NUM_SLAVES; i++) {
 		spawn_subpop(i);
 	}
@@ -99,7 +108,7 @@ void master() {
 	while (true) {
 
 		// perform the code for each node
-		#pragma omp parallel for num_threads(32)
+		#pragma omp parallel for num_threads(NUM_OF_THREADS)
 		for (int slave = 0; slave < subpopulation.size(); slave++) {
 			perform_slave_op(slave);
 		}
@@ -115,6 +124,10 @@ void master() {
 		// get best of best
 		best_node = get_best_node(best, true);
 
+		if (GENERATION == 1) {
+			best_node_prev = best_node;
+		}
+
 		if (GENERATION % UPDATE_PERIOD == 0) {
 			// update con(si) from each subpopulation
 			update_contribution(best_node);
@@ -125,7 +138,11 @@ void master() {
 
 		GENERATION++;
 
-		if (GENERATION% 100 == 0)	cout << "Generation :" << GENERATION << endl;
+		if (GENERATION % 100 == 0) {
+			float temp = second_norm(vector_diff(best_node.x, ZEROES));
+			cout << "Generation :" << GENERATION << endl;
+			cout << temp << endl;
+		}
 
 		// termination
 		if (GENERATION > GEN_THRESSHOLD) {
@@ -138,9 +155,18 @@ void master() {
 				}
 				break;
 			}
+			/*
+			if (second_norm(vector_diff(best_node.x, best_node_prev.x)) <= TERMINATION_THRESHOLD) {
+				cout << GENERATION << endl;
+				for (int i = 0; i < best_node.x.size(); i++) {
+					cout << best_node.x[i] << " ";
+				}
+				break;
+			}
+			best_node_prev = best_node;
+			*/
 		}
 
-		best_node_prev = best_node;
 	}
 }
 
@@ -148,7 +174,7 @@ void spawn_subpop(int sp) {
 	subpopulation[sp].resize(SUBPOPULATION_SIZE);
 	// initialise with random x values
 	int node_counter = 0;
-	#pragma omp parallel for num_threads(32)
+	#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < SUBPOPULATION_SIZE; i++) {
 		subpopulation[sp][i] = rand_node(node_counter++);
 	}
@@ -162,16 +188,19 @@ float rand_0_1() {
 node rand_node(int node_id) {
 	node new_node;
 	new_node.node_id = node_id;
+	new_node.x.resize(DIMENSION, 0);
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < DIMENSION; i++) {
-		new_node.x.push_back(rand());
+		new_node.x[i] = (rand());
 	}
 	return new_node;
 }
 
 vector<node> get_best() {
-	vector<node> best;
+	vector<node> best(subpopulation.size());
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int sp = 0; sp < subpopulation.size(); sp++) {
-		best.push_back(get_best_node(subpopulation[sp], true));
+		best[sp] = (get_best_node(subpopulation[sp], true));
 	}
 	return best;
 }
@@ -183,7 +212,7 @@ node get_best_node(vector<node> input, bool maximum = true) {
 	float best_value_max = opt_func(input[0].x);
 	float best_value_min = opt_func(input[0].x);
 
-	#pragma omp parallel for num_threads(32)
+	#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 1; i < input.size(); i++) {
 		float value = opt_func(input[i].x);
 		if (value > best_value_max) {
@@ -205,7 +234,7 @@ node get_best_node(vector<node> input, bool maximum = true) {
 }
 
 void update_contribution(node best_node) {
-#pragma omp parallel for num_threads(32)
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int sp = 0; sp < subpopulation.size(); sp++) {	// for each subpopulation
 		// update the contribution
 		if (check_exists(subpopulation[sp], best_node)) {
@@ -254,7 +283,7 @@ void merge(vector<node> best, node best_node) {
 		int min_subpop = 0;
 
 		// check the subpop it exists in
-		#pragma omp parallel for num_threads(32)
+		#pragma omp parallel for num_threads(NUM_OF_THREADS)
 		for (int i = 0; i < best.size(); i++) {
 			if (best[i] == worst_of_best) {
 				min_subpop = i;
@@ -279,7 +308,7 @@ void merge(vector<node> best, node best_node) {
 int find_max_conttribution_subpop() {
 	int max_cont = contribution[0];
 	int sp = 0;
-#pragma omp parallel for num_threads(32)
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 1; i < contribution.size(); i++) {
 		if (contribution[i] > max_cont) {
 			max_cont = contribution[i];
@@ -315,7 +344,7 @@ void perform_slave_op(int slave) {
 vector<node> selection(vector<node> u, vector<node> x) {
 	vector<node> result = x;
 
-	#pragma omp parallel for num_threads(32)
+	#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < x.size(); i++) {
 		if (opt_func(u[i].x) <= opt_func(x[i].x)) {
 			result[i] = u[i];
@@ -351,6 +380,7 @@ vector<node> mutate(vector<node> input) {
 	// choose 3 random index
 	vector<node> result = input;
 
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < input.size(); i++) {
 		int r1, r2, r3;
 		r1 = r2 = r3 = i;
@@ -370,8 +400,10 @@ vector<float> vector_sum(vector<float> a, vector<float> b) {
 		cerr << "INVALID VECTOR SUMMATION" << endl;
 		exit(1);
 	}
+	result.resize(a.size(), 0);
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < a.size(); i++) {
-		result.push_back(a[i] + b[i]);	// assumption no overflow
+		result[i] = (a[i] + b[i]);	// assumption no overflow
 	}
 	return result;
 }
@@ -379,28 +411,36 @@ vector<float> vector_sum(vector<float> a, vector<float> b) {
 vector<float> vector_diff(vector<float> a, vector<float> b) {
 	vector<float> result;
 	if (a.size() != b.size()) {
-		cerr << "INVALID VECTOR SUMMATION" << endl;
+		cerr << "INVALID VECTOR DIFF" << endl;
 		exit(1);
 	}
+	result.resize(a.size(), 0);
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < a.size(); i++) {
-		result.push_back(a[i] - b[i]);	// assumption no overflow
+		result[i] = (a[i] - b[i]);	// assumption no overflow
 	}
 	return result;
 }
 
 vector<float> vector_product(float s, vector<float> v) {
 	vector<float> result;
-#pragma omp parallel for num_threads(32)
+	result.resize(v.size(), 0);
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < v.size(); i++) {
-		result.push_back(s * v[i]);
+		result[i] = (s * v[i]);
 	}
 	return result;
 }
 
 float second_norm(vector<float> input) {
 	float norm = 0;
+	vector<float> norm_i(input.size(), 0);
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < input.size(); i++) {
-		norm += input[i] * input[i];
+		norm_i[i] = input[i] * input[i];
+	}
+	for (int i = 0; i < input.size(); i++) {
+		norm += norm_i[i];
 	}
 	return norm;
 }
@@ -408,16 +448,26 @@ float second_norm(vector<float> input) {
 float shifted_elliptic(vector<float> input) {
 	float result = 0;
 	float d = input.size() - 1;
+	vector<float> result_i(input.size());
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < input.size(); i++) {
-		result += pow(1000000, (i / d))*input[i] * input[i];
+		result_i[i] = pow(1000000, (i / d))*input[i] * input[i];
+	}
+	for (int i = 0; i < input.size(); i++) {
+		result += result_i[i];
 	}
 	return result;
 }
 
 float shifted_rastrigin(vector<float> input) {
 	float result = 0;
+	vector<float> result_i(input.size());
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < input.size(); i++) {
-		result += (input[i] * input[i] - 10 * cos(2 * 3.14*input[i]) + 10);
+		result_i[i] = (input[i] * input[i] - 10 * cos(2 * 3.14*input[i]) + 10);
+	}
+	for (int i = 0; i < input.size(); i++) {
+		result += result_i[i];
 	}
 	return result;
 }
@@ -425,11 +475,19 @@ float shifted_rastrigin(vector<float> input) {
 float shifted_ackley(vector<float> input) {
 	float r1 = 0, r2 = 0;
 	float d = input.size();
+	vector<float> r1_i(input.size());
+	vector<float> r2_i(input.size());
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
 	for (int i = 0; i < input.size(); i++) {
-		r1 += (input[i] * input[i]);
+		r1_i[i] = (input[i] * input[i]);
+	}
+#pragma omp parallel for num_threads(NUM_OF_THREADS)
+	for (int i = 0; i < input.size(); i++) {
+		r2_i[i] = cos(input[i]);
 	}
 	for (int i = 0; i < input.size(); i++) {
-		r2 += cos(input[i]);
+		r1 += r1_i[i];
+		r2 += r2_i[i];
 	}
 	r1 = -0.2*sqrt(r1 / d);
 	r2 = r2 / d;
